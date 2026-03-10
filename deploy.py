@@ -121,6 +121,10 @@ def deploy_files(hostname):
                 else:
                     print("Warning: Token file does not have expires_at field")
         
+        # Clean up old directory if it exists
+        print("Checking for old directory ~/pushMake")
+        run_remote_command(hostname, 'test -d ~/pushMake && mv ~/pushMake ~/pushMake.bak && echo "Renamed ~/pushMake to ~/pushMake.bak" || echo "No old directory found"')
+        
         # Create remote directory
         print("Creating remote directory ~/linkedin-announce")
         run_remote_command(hostname, 'mkdir -p ~/linkedin-announce')
@@ -211,7 +215,7 @@ def deploy_files(hostname):
         
         # Install required Python packages
         print("Installing required Python packages")
-        run_remote_command(hostname, '~/venv/bin/pip3 install boto3')
+        run_remote_command(hostname, '~/venv/bin/pip3 install boto3 requests')
         
         # Setup cron job
         print("Setting up cron job")
@@ -228,7 +232,7 @@ def deploy_files(hostname):
         # Create new crontab content
         crontab_lines = []
         if temp_cron.returncode == 0:
-            crontab_lines = [line for line in temp_cron.stdout.splitlines() if 'linkedin_poster.py' not in line]
+            crontab_lines = [line for line in temp_cron.stdout.splitlines() if 'linkedin_poster.py' not in line and 'pushMakeMain.py' not in line]
         crontab_lines.append(cron_command)
         
         # Write to temporary file
