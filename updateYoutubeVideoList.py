@@ -45,7 +45,7 @@ import requests
 
 import groq
 from youtubeManage.youtubeManageUtil import authenticate_youtube_mingdaoai, get_cached_video_details
-from announceMock.makeWebhook.pushMakeUtil import confirm_video_link
+from linkedin_api import confirm_video_link
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
 from youtube_transcript_api.formatters import TextFormatter

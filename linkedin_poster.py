@@ -10,7 +10,7 @@ import argparse
 import sys
 import traceback
 
-from pushMakeUtil import pushLinkedInYoutube, confirm_video_link
+from linkedin_api import pushLinkedInYoutube, confirm_video_link
 from videoUtil import get_valid_video, update_history, webhook_history_file_key
 
 def validate_args(args):

@@ -5,15 +5,19 @@ This repository consolidates scripts for automating LinkedIn posting and monitor
 ## Scripts
 
 - `monitor_linkedin_cron.py` – Hourly cron job that checks S3 history for recent LinkedIn posts, logs status to `.cache/monitor_status.json`, and warns if no post within threshold (default 2 days).
-- `pushMakeMain.py` – Main script to select a recent video from S3 list and post to LinkedIn via API (or dry‑run). Uses `pushMakeUtil.py` and `videoUtil.py`.
-- `pushMakeUtil.py` – Utilities for LinkedIn API posting and Make webhook integration.
+- `linkedin_poster.py` – Main script to select a recent video from S3 list and post to LinkedIn via API (or dry‑run). Uses `linkedin_api.py` and `videoUtil.py`.
+- `linkedin_api.py` – LinkedIn API posting utilities (direct API integration, no longer uses Make.com webhooks).
 - `videoUtil.py` – Common functions to read S3 video list and history, select a valid video, and update history.
 - `confirm_video_link.py` – Helper to validate video URLs.
 - `updateYoutubeVideoList.py` – Updates the video list from YouTube (or other sources).
 - `uploadYoutubeVideoList.py` – Uploads video list to S3.
 - `uploadHistory.py` – Uploads history file to S3.
-- `deploy.py` – Deployment script (likely for EC2).
-- `createMakebucket.py` – Creates S3 bucket for Make integration.
+- `deploy.py` – Deployment script for EC2 instance.
+- `create_s3_bucket.py` – Creates S3 bucket for video storage.
+
+## Deprecated Make.com Functions
+
+Legacy Make.com webhook functions have been moved to `bak/webhook_functions.py`. These are no longer used; posting is now done directly via the LinkedIn API.
 
 ## Dependencies
 
@@ -36,12 +40,18 @@ uv run monitor_linkedin_cron.py [--dry-run] [--threshold DAYS]
 To test the LinkedIn posting logic (dry‑run):
 
 ```bash
-uv run pushMakeMain.py --dry-run
+uv run linkedin_poster.py --dry-run
 ```
 
 ## EC2 Integration
 
-The script that runs on EC2 to push new videos to LinkedIn (`pushMakeMain.py`) is now also in this repo. Update the EC2 instance to pull from this repository and run the script from this location.
+The script that runs on EC2 to push new videos to LinkedIn (`linkedin_poster.py`) is now also in this repo. The deployment script (`deploy.py`) has been updated to deploy to `~/linkedin-announce` on the EC2 instance and set up a cron job at 9:30 AM daily.
+
+To deploy updates to EC2:
+
+```bash
+uv run deploy.py --instance-id <instance-id>
+```
 
 ## Environment
 

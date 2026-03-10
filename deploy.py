@@ -122,16 +122,16 @@ def deploy_files(hostname):
                     print("Warning: Token file does not have expires_at field")
         
         # Create remote directory
-        print("Creating remote directory ~/pushMake")
-        run_remote_command(hostname, 'mkdir -p ~/pushMake')
+        print("Creating remote directory ~/linkedin-announce")
+        run_remote_command(hostname, 'mkdir -p ~/linkedin-announce')
         
         # Get the current script's directory
         current_dir = os.path.dirname(os.path.abspath(__file__))
         
         # Files to transfer
         files_to_transfer = [
-            'pushMakeMain.py',
-            'pushMakeUtil.py',
+            'linkedin_poster.py',
+            'linkedin_api.py',
             'video_list.txt',
             'history.txt',
             'videoUtil.py'
@@ -157,7 +157,7 @@ def deploy_files(hostname):
                             "-i", ssh_key_path,
                             "-o", "StrictHostKeyChecking=no",
                             temp_file.name,
-                            f"{username}@{hostname}:~/pushMake/{file}"
+                            f"{username}@{hostname}:~/linkedin-announce/{file}"
                         ]
                         result = subprocess.run(scp_command, capture_output=True, text=True)
                         os.unlink(temp_file.name)
@@ -168,14 +168,14 @@ def deploy_files(hostname):
                         "-i", ssh_key_path,
                         "-o", "StrictHostKeyChecking=no",
                         local_path,
-                        f"{username}@{hostname}:~/pushMake/"
+                        f"{username}@{hostname}:~/linkedin-announce/"
                     ]
                     result = subprocess.run(scp_command, capture_output=True, text=True)
                 
                 if result.returncode == 0:
                     print(f"Transferred {file} successfully")
                     # Make executable
-                    run_remote_command(hostname, f'chmod +x ~/pushMake/{file}')
+                    run_remote_command(hostname, f'chmod +x ~/linkedin-announce/{file}')
                 else:
                     print(f"Warning: Failed to transfer {file}: {result.stderr}")
             else:
@@ -215,7 +215,7 @@ def deploy_files(hostname):
         
         # Setup cron job
         print("Setting up cron job")
-        cron_command = '30 9 * * * cd ~/pushMake; ~/venv/bin/python3 pushMakeMain.py >> ~/pushMake/cron.log 2>&1'
+        cron_command = '30 9 * * * cd ~/linkedin-announce; ~/venv/bin/python3 linkedin_poster.py >> ~/linkedin-announce/cron.log 2>&1'
         
         # Get existing crontab
         print("Retrieving existing crontab")
@@ -228,7 +228,7 @@ def deploy_files(hostname):
         # Create new crontab content
         crontab_lines = []
         if temp_cron.returncode == 0:
-            crontab_lines = [line for line in temp_cron.stdout.splitlines() if 'pushMakeMain.py' not in line]
+            crontab_lines = [line for line in temp_cron.stdout.splitlines() if 'linkedin_poster.py' not in line]
         crontab_lines.append(cron_command)
         
         # Write to temporary file

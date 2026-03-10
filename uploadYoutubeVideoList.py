@@ -15,7 +15,7 @@ import datetime
 from datetime import timezone
 import time
 
-from announceMock.makeWebhook.pushMakeUtil import confirm_video_link
+from linkedin_api import confirm_video_link
 from youtubeManage.youtubeManageUtil import authenticate_youtube_mingdaoschool, get_cached_video_details
 import traceback
 

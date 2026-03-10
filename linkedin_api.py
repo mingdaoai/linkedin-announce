@@ -14,8 +14,7 @@ import boto3
 import requests
 import traceback
 
-# URL to post the content
-url = "https://hook.us1.make.com/20nsx4oowyzju2sxmunjpd7x8sw4x9wq"
+
 
 class LinkedInPoster:
     def __init__(self):
@@ -133,26 +132,6 @@ class LinkedInPoster:
             print(f"Error creating post: {str(e)}")
             raise
 
-def pushMakeWebhook(content):
-    actualContent = content.copy()
-    actualContent["json"] = json.dumps(content, indent=2)
-    # Post the content to the URL
-    response = requests.post(url, json=actualContent)
-
-    # Check the response status
-    if response.status_code == 200:
-        print("Content posted successfully")
-    else:
-        print(f"Failed to post content. Status code: {response.status_code}")
-
-def pushLinkedInWebhook(textContent, includeKen=False, includeXiao=False, includeMingDao=False, includeAll=False):
-    content = {
-        "textContent": textContent,
-        "isLinkedinKen": includeKen or includeAll,
-        "isLinkedinXiao": includeXiao or includeAll,
-        "isLinkedinMingdao": includeMingDao or includeAll,
-    }
-    pushMakeWebhook(content)
 
 def pushLinkedInYoutube(textContent, video_url=None, video_title=None, dry_run=False):
     """
@@ -202,94 +181,9 @@ def pushLinkedInYoutube(textContent, video_url=None, video_title=None, dry_run=F
         traceback.print_exc()
         raise
 
-def pushTiktok(
-    title,
-    videoFile,
-    videoTitle,
-    isChinese=False, isEnglish=False):
-    assert os.path.exists(videoFile), f"Video file not found at {videoFile}"
-    # upload video to S3 first to bucket designmake under the folder tiktok
-    s3 = boto3.client('s3')
-    s3_key = f'tiktok/{videoTitle}.mp4'
-    s3.upload_file(videoFile, 'designmake', s3_key)
-    
-    # Generate the public S3 URL
-    video_url = f'https://designmake.s3.amazonaws.com/{s3_key}'
-
-    # confirm the video link is valid
-    assert confirm_video_link(video_url), f"Video link is not valid: {video_url}"
-    
-    content = {
-        "title": title,
-        "videoLink": video_url,
-        "videoTitle": videoTitle,
-        "isChinese": isChinese,
-        "isEnglish": isEnglish,
-    }
 
 
-def pushYoutube(
-    title,
-    videoFile,
-    videoTitle,
-    isChinese=False, isEnglish=False):
 
-    assert isChinese or isEnglish, "At least one language must be specified"
-    assert isChinese != isEnglish, "Chinese and English cannot be both True"
-
-    assert os.path.exists(videoFile), f"Video file not found at {videoFile}"
-    # upload video to S3 first to bucket designmake under the folder tiktok
-    s3 = boto3.client('s3')
-    videoFileBaseName = os.path.basename(videoFile)
-    s3_key = f'youtube/{videoFileBaseName}'
-    s3.upload_file(videoFile, 'designmake', s3_key)
-    
-    # Generate the public S3 URL
-    video_url = f'https://designmake.s3.amazonaws.com/{s3_key}'
-
-    # confirm the video link is valid
-    assert confirm_video_link(video_url), f"Video link is not valid: {video_url}"
-    
-    content = {
-        "title": title,
-        "videoTitle": videoTitle,
-        "videoLink": video_url,
-        "isYoutubeMingChinese": isChinese,
-        "isYoutubeMingEnglish": isEnglish,
-    }
-    pushMakeWebhook(content)
-
-def test():
-    # Content to be posted
-    content = {
-        "title": "test title",
-        "textContent": "text content",
-
-        "videoLink": "video url",
-        "videoTitle": "video title",
-        "videoDescription": "video description",
-        "videoImageUrl": "video image url",
-        "videoThumbnailUrl": "video thumbnail url",
-
-        "imageName": "image name",
-        "imageUrl": "image url",
-        "isYoutubeMingChinese": False,
-        "isYoutubeMingEnglish": False,
-        "isTiktokChinese": False,
-        "isTiktokEnglish": False,
-        "isText": False,
-        "isImage": False,
-        "isVideo": False,
-        "isLinkedinKen": False,
-        "isLinkedinMingdao": False,
-        "isLinkedinXiao": False,
-    }
-
-    pushMakeWebhook(content)
-
-
-if __name__ == "__main__":
-    test()
 
 
 def confirm_video_link(video_url):
