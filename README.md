@@ -28,7 +28,7 @@ All scripts are written for Python ≥3.10 and use `uv` for dependency managemen
 The hourly monitoring cron entry has been updated to point to this repository:
 
 ```
-0 * * * * cd '/Users/haha/github/linkedin-announce' && PATH="$HOME/.local/bin:$PATH" uv run monitor_linkedin_cron.py >> '/Users/haha/github/linkedin-announce/cron.log' 2>&1
+0 * * * * cd '/Users/haha/github/linkedin-announce' && /Users/haha/.local/bin/uv run monitor_linkedin_cron.py >> '/Users/haha/github/linkedin-announce/cron.log' 2>&1
 ```
 
 To manually run the monitor:
@@ -61,3 +61,19 @@ Ensure AWS credentials are configured (via `~/.aws/credentials` or environment v
 
 - `cron.log` – Output from the hourly monitor cron.
 - `.cache/monitor_status.json` – JSON status file written by the monitor, useful for other scripts (e.g., todo_due).
+
+## Integration with Todoist
+
+The `todo_due` script (in the `~/github/todoist` directory) checks the `.cache/monitor_status.json` file and warns if the status is older than 48 hours or if there are posting issues. This provides visibility into LinkedIn posting health directly from your daily task review.
+
+To manually check the status:
+
+```bash
+cd ~/github/todoist && ./todo_due
+```
+
+If you see warnings about outdated status, run the monitor manually:
+
+```bash
+cd ~/github/linkedin-announce && ./monitor_linkedin_cron.py
+```
