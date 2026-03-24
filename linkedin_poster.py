@@ -10,8 +10,8 @@ import argparse
 import sys
 import traceback
 
-from linkedin_api import pushLinkedInYoutube, confirm_video_link
-from videoUtil import get_valid_video, update_history, webhook_history_file_key
+from linkedin_api import pushLinkedInYoutube, pushLinkedInImage, confirm_video_link
+from videoUtil import get_valid_post, download_linkedin_post_assets, update_history, webhook_history_file_key
 
 def validate_args(args):
     """Validate the parsed arguments."""
@@ -49,20 +49,41 @@ def main():
             parser.print_help()
             return 1
             
-        video = get_valid_video(webhook_history_file_key)
-        if video and confirm_video_link(video['url']):
+        post = get_valid_post(webhook_history_file_key)
+        if not post:
+            print("No valid post (video or LinkedIn image) to publish.")
+            return 1
+        
+        post_type = post.get('post_type')
+        if post_type == 'video':
+            if not confirm_video_link(post['url']):
+                print(f"Video link is invalid: {post['url']}")
+                return 1
+            
             text = f"""
-{video['title']}
+{post['title']}
 
 To book private 1-1 career coaching or interview coaching, please visit mingdaoschool.com or send me a private message.
             """.strip()
             
-            print(f"Uploading\n{text}")
-            pushLinkedInYoutube(text, video_url=video['url'], video_title=video['title'], dry_run=args.dry_run)
+            print(f"Uploading video link post:\n{text}")
+            pushLinkedInYoutube(text, video_url=post['url'], video_title=post['title'], dry_run=args.dry_run)
             if not args.dry_run:
-                update_history(video, webhook_history_file_key)
+                update_history(post, webhook_history_file_key)
+        
+        elif post_type == 'linkedin-image':
+            assets = download_linkedin_post_assets(post)
+            with open(assets['post_text'], 'r', encoding='utf-8') as f:
+                post_text = f.read()
+            
+            print(f"Uploading LinkedIn image post:\n{post_text[:200]}...")
+            pushLinkedInImage(post_text, assets['image_path'], dry_run=args.dry_run)
+            if not args.dry_run:
+                update_history(post, webhook_history_file_key)
+        
         else:
-            print("No valid video to post or video link is invalid.")
+            print(f"Unknown post type: {post_type}")
+            return 1
             
         return 0
         

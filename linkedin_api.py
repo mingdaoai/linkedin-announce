@@ -9,6 +9,7 @@
 import json
 import os
 from datetime import datetime
+from typing import Optional
 
 import boto3
 import requests
@@ -23,7 +24,7 @@ class LinkedInPoster:
         self.token_path = os.path.expanduser('~/.mingdaoai/linkedin_token.json')
         self.token_data = self._load_token_data()
 
-    def _load_token_data(self) -> dict:
+    def _load_token_data(self) -> Optional[dict]:
         """Load token data from file if it exists and is not expired"""
         try:
             if os.path.exists(self.token_path):
@@ -39,7 +40,7 @@ class LinkedInPoster:
             print(f"Error loading token data: {str(e)}")
         return None
 
-    def _get_video_id(self, video_url: str) -> str:
+    def _get_video_id(self, video_url: str) -> Optional[str]:
         """Extract video ID from YouTube URL in various formats"""
         try:
             if "mingdaoschool.com/youtube" in video_url:
@@ -58,21 +59,125 @@ class LinkedInPoster:
             traceback.print_exc()
             return None
 
-    def _get_thumbnail_url(self, video_id: str) -> str:
+    def _get_thumbnail_url(self, video_id: Optional[str]) -> Optional[str]:
         """Get YouTube thumbnail URL for a video ID"""
         if not video_id:
             return None
         thumbnail_url = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
         return thumbnail_url
-    def create_post(self, text: str, visibility: str = "PUBLIC", media_url: str = None, thumbnail_url: str = None, video_title: str = None) -> dict:
+
+    def _register_upload_asset(self, file_size: int, media_type: str = "image/jpeg") -> dict:
+        """Register an asset upload with LinkedIn Assets API.
+        
+        Args:
+            file_size: Size of the file in bytes
+            media_type: MIME type of the media
+            
+        Returns:
+            dict containing upload_url and asset_urn
+        """
+        if not self.token_data:
+            raise ValueError("No valid token found")
+        
+        url = f"{self.api_base_url}/v2/assets?action=registerUpload"
+        headers = {
+            "Authorization": f"Bearer {self.token_data['access_token']}",
+            "Accept": "application/json",
+            "X-Restli-Protocol-Version": "2.0.0",
+            "LinkedIn-Version": self.api_version,
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "registerUploadRequest": {
+                "recipes": [
+                    "urn:li:digitalmediaRecipe:feedshare-image"
+                ],
+                "owner": self.token_data['person_urn'],
+                "serviceRelationships": [
+                    {
+                        "relationshipType": "OWNER",
+                        "identifier": "urn:li:userGeneratedContent"
+                    }
+                ],
+                "supportedUploadMechanism": ["SYNCHRONOUS_UPLOAD"]
+            }
+        }
+        
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            if response.status_code != 200:
+                print(f"Response status: {response.status_code}")
+                print(f"Response body: {response.text}")
+            response.raise_for_status()
+            result = response.json()
+            
+            # Extract upload URL and asset URN
+            value = result.get('value', {})
+            upload_mechanism = value.get('uploadMechanism', {})
+            upload_http_request = upload_mechanism.get('com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest', {})
+            upload_url = upload_http_request.get('uploadUrl')
+            asset_urn = value.get('asset')
+            
+            if not upload_url or not asset_urn:
+                raise Exception("Failed to extract upload URL or asset URN from response")
+            
+            return {
+                'upload_url': upload_url,
+                'asset_urn': asset_urn,
+                'headers': upload_http_request.get('headers', {})
+            }
+        except Exception as e:
+            print(f"Error registering upload: {str(e)}")
+            raise
+
+    def _upload_image_binary(self, upload_url: str, image_path: str, headers: Optional[dict] = None) -> bool:
+        """Upload image binary data to LinkedIn.
+        
+        Args:
+            upload_url: URL returned from register_upload_asset
+            image_path: Path to image file
+            headers: Optional headers for upload
+            
+        Returns:
+            bool indicating success
+        """
+        if not self.token_data:
+            raise ValueError("No valid token found")
+        
+        try:
+            with open(image_path, 'rb') as f:
+                image_data = f.read()
+            
+            upload_headers = {
+                "Authorization": f"Bearer {self.token_data['access_token']}",
+                "Content-Type": "image/jpeg"
+            }
+            if headers:
+                upload_headers.update(headers)
+            
+            response = requests.put(upload_url, headers=upload_headers, data=image_data)
+            
+            if response.status_code not in [200, 201]:
+                print(f"Upload failed with status {response.status_code}: {response.text}")
+                return False
+            
+            print(f"Image uploaded successfully: {image_path}")
+            return True
+        except Exception as e:
+            print(f"Error uploading image: {str(e)}")
+            return False
+
+    def create_post(self, text: str, visibility: str = "PUBLIC", media_url: Optional[str] = None, thumbnail_url: Optional[str] = None, video_title: Optional[str] = None, image_urn: Optional[str] = None) -> dict:
         """
         Create a post on LinkedIn
         Args:
             text: The text content of the post
             visibility: Post visibility (PUBLIC or CONNECTIONS)
-            media_url: Optional URL of the media to include in the post
+            media_url: Optional URL of the media to include in the post (for ARTICLE posts)
             thumbnail_url: Optional URL of the thumbnail image for the media
             video_title: Optional title of the video
+            image_urn: Optional URN of an uploaded image asset (for IMAGE posts)
         Returns:
             dict: Response from LinkedIn API
         """
@@ -88,6 +193,14 @@ class LinkedInPoster:
             "Content-Type": "application/json"
         }
         
+        # Determine shareMediaCategory based on inputs
+        if image_urn:
+            share_media_category = "IMAGE"
+        elif media_url:
+            share_media_category = "ARTICLE"
+        else:
+            share_media_category = "NONE"
+        
         payload = {
             "author": self.token_data['person_urn'],
             "lifecycleState": "PUBLISHED",
@@ -96,7 +209,7 @@ class LinkedInPoster:
                     "shareCommentary": {
                         "text": text
                     },
-                    "shareMediaCategory": "ARTICLE" if media_url else "NONE"
+                    "shareMediaCategory": share_media_category
                 }
             },
             "visibility": {
@@ -104,7 +217,15 @@ class LinkedInPoster:
             }
         }
 
-        if media_url:
+        if image_urn:
+            # IMAGE post with asset URN
+            media_object = {
+                "status": "READY",
+                "media": image_urn
+            }
+            payload["specificContent"]["com.linkedin.ugc.ShareContent"]["media"] = [media_object]
+        elif media_url:
+            # ARTICLE post with external URL
             media_object = {
                 "status": "READY",
                 "originalUrl": media_url,
@@ -184,6 +305,51 @@ def pushLinkedInYoutube(textContent, video_url=None, video_title=None, dry_run=F
 
 
 
+
+
+def pushLinkedInImage(textContent, image_path, dry_run=False):
+    """
+    Post an image directly to LinkedIn using the API
+    Args:
+        textContent: The text content to post
+        image_path: Path to image file
+        dry_run: If True, simulate the post without actually posting
+    """
+    poster = LinkedInPoster()
+    try:
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Image file not found: {image_path}")
+        
+        file_size = os.path.getsize(image_path)
+        
+        if dry_run:
+            print("[DRY RUN] Would post the following image content:")
+            print("=" * 50)
+            print(f"Text content: {textContent}")
+            print(f"Image path: {image_path}")
+            print(f"File size: {file_size} bytes")
+            print("=" * 50)
+            print("[DRY RUN] No actual post made to LinkedIn")
+            return
+        
+        # Register upload asset
+        upload_info = poster._register_upload_asset(file_size)
+        upload_url = upload_info['upload_url']
+        asset_urn = upload_info['asset_urn']
+        headers = upload_info.get('headers', {})
+        
+        # Upload image binary
+        success = poster._upload_image_binary(upload_url, image_path, headers)
+        if not success:
+            raise Exception("Failed to upload image to LinkedIn")
+        
+        # Create post with image URN
+        result = poster.create_post(textContent, image_urn=asset_urn)
+        print("Image post created successfully:", result)
+    except Exception as e:
+        print(f"Failed to create image post: {str(e)}")
+        traceback.print_exc()
+        raise
 
 
 def confirm_video_link(video_url):
