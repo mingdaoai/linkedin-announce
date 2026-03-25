@@ -211,8 +211,10 @@ def get_valid_post(history_key, days=5):
         creation_date, and other type-specific fields.
     """
     history = read_history(history_key)
+    print(f"DEBUG: History entries: {len(history)}")
     
     video_list = read_video_list()
+    print(f"DEBUG: Video list entries: {len(video_list)}")
     all_items = []
     for line in video_list:
         if line.strip():
@@ -228,6 +230,7 @@ def get_valid_post(history_key, days=5):
                 all_items.append(item)
     
     post_lines = read_linkedin_post_list()
+    print(f"DEBUG: LinkedIn post list entries: {len(post_lines)}")
     for line in post_lines:
         if line.strip():
             parts = line.strip().split('|')
@@ -248,6 +251,10 @@ def get_valid_post(history_key, days=5):
                 }
                 all_items.append(item)
     
+    print(f"DEBUG: Total items: {len(all_items)}")
+    for idx, item in enumerate(all_items):
+        print(f"  {idx}: {item['creation_date']} {item['post_type']} - {item['title'][:50]}...")
+    
     if not all_items:
         print("No posts (videos or LinkedIn posts) found.")
         return None
@@ -257,7 +264,9 @@ def get_valid_post(history_key, days=5):
         creation_date = datetime.datetime.strptime(item['creation_date'], '%Y-%m-%d')
         is_recent = (datetime.datetime.now() - creation_date).days <= 14
         item_url = item.get('url') or item.get('post_url')
-        if is_recent and not is_video_recent(item_url, history, days):
+        already_posted = is_video_recent(item_url, history, days)
+        print(f"DEBUG: Item '{item['title'][:50]}...' creation_date={item['creation_date']}, is_recent={is_recent}, already_posted={already_posted}")
+        if is_recent and not already_posted:
             recent_items.append(item)
             print(f"Found recent {item['post_type']}: {item['title']}")
     
