@@ -35,7 +35,7 @@ def get_instance_hostname(instance_id):
 
 def run_remote_command(hostname, command):
     print(f"Running remote command on {hostname}: {command}")
-    ssh_key_path = os.path.expandvars(os.environ["HOME"] + "/p_a/qmicro.pem")
+    ssh_key_path = os.path.expandvars(os.environ["HOME"] + "/.p_a/qmicro.pem")
     username = "designclub"
     
     ssh_command = [
@@ -67,7 +67,7 @@ def refresh_linkedin_token():
 
 def deploy_files(hostname):
     print(f"Starting deployment to {hostname}")
-    ssh_key_path = os.path.expandvars(os.environ["HOME"] + "/p_a/qmicro.pem")
+    ssh_key_path = os.path.expandvars(os.environ["HOME"] + "/.p_a/qmicro.pem")
     username = "designclub"
     
     try:
