@@ -6,6 +6,20 @@
 #     "requests>=2.25.0",
 # ]
 # ///
+"""Publish one candidate post (YouTube video or LinkedIn image post) to LinkedIn.
+
+Candidates come from two S3 lists, merged by videoUtil.get_valid_post:
+  - s3://dscub/videos/list.txt          -> post_type='video'
+  - s3://dscub/linkedin-posts/list.txt  -> post_type='linkedin-image'
+
+Dedupe key is the post URL (column 4 of each list), compared against
+s3://dscub/videos/history.txt:
+  - video:          the YouTube URL
+  - linkedin-image: the s3_path to post.txt (e.g. linkedin-posts/image_<hash>_<ts>/post.txt)
+
+A candidate is skipped if its URL appears in history within the last 5 days.
+No repo-level dedupe happens here; that is enforced upstream at upload time.
+"""
 import argparse
 import sys
 import traceback
