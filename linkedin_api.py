@@ -19,7 +19,16 @@ import traceback
 
 class LinkedInPoster:
     def __init__(self):
-        self.api_version = "202404"
+        # Legacy /v2 calls ignore this; the versioned /rest calls require a *supported* version,
+        # and LinkedIn sunsets old ones (202508 went out on 2026-08-17). Keep it current.
+        self.api_version = os.environ.get("LINKEDIN_VERSION", "202608")
+        self.legacy_api_version = "202404"
+        # The versioned Content APIs (/rest/posts, /rest/images) replace /v2/ugcPosts and
+        # /v2/assets. Our existing member token already works against them — an initializeUpload
+        # probe on 2026-08-18 returned 200 with an image URN — so this needs no new credential.
+        # Set LINKEDIN_USE_VERSIONED=0 to fall straight back to the legacy path.
+        self.use_versioned = os.environ.get(
+            "LINKEDIN_USE_VERSIONED", "1").strip().lower() not in {"0", "false", "no"}
         self.api_base_url = "https://api.linkedin.com"
         self.token_path = os.path.expanduser('~/.mingdaoai/linkedin_token.json')
         self.token_data = self._load_token_data()
@@ -79,6 +88,9 @@ class LinkedInPoster:
         if not self.token_data:
             raise ValueError("No valid token found")
         
+        if self.use_versioned:
+            return self._initialize_image_upload()
+
         url = f"{self.api_base_url}/v2/assets?action=registerUpload"
         headers = {
             "Authorization": f"Bearer {self.token_data['access_token']}",
@@ -130,6 +142,67 @@ class LinkedInPoster:
         except Exception as e:
             print(f"Error registering upload: {str(e)}")
             raise
+
+    def _versioned_headers(self) -> dict:
+        """Headers every versioned Content API call requires."""
+        return {
+            "Authorization": f"Bearer {self.token_data['access_token']}",
+            "Accept": "application/json",
+            "X-Restli-Protocol-Version": "2.0.0",
+            "LinkedIn-Version": self.api_version,
+            "Content-Type": "application/json",
+        }
+
+    def _initialize_image_upload(self) -> dict:
+        """Register an image with the Images API, which replaces the Assets API.
+
+        Returns the same shape as the legacy registerUpload path — upload_url, asset_urn, headers
+        — so the caller does not care which API produced it. The URN differs in kind
+        (urn:li:image:... rather than urn:li:digitalmediaAsset:...) and must be paired with the
+        matching post API, which is why the two switch together on self.use_versioned.
+        """
+        if not self.token_data:
+            raise ValueError("No valid token found")
+        url = f"{self.api_base_url}/rest/images?action=initializeUpload"
+        payload = {"initializeUploadRequest": {"owner": self.token_data["person_urn"]}}
+        response = requests.post(url, headers=self._versioned_headers(), json=payload, timeout=60)
+        if response.status_code != 200:
+            print(f"initializeUpload failed {response.status_code}: {response.text[:300]}")
+        response.raise_for_status()
+        value = response.json().get("value", {})
+        upload_url, image_urn = value.get("uploadUrl"), value.get("image")
+        if not upload_url or not image_urn:
+            raise Exception("Images API returned no uploadUrl/image URN")
+        return {"upload_url": upload_url, "asset_urn": image_urn, "headers": {}}
+
+    def _create_post_versioned(self, text: str, visibility: str, image_urn: Optional[str]) -> dict:
+        """Create a member post through the Posts API, which replaces ugcPosts.
+
+        The response carries the new post's URN in the x-restli-id header rather than a body, so
+        the return is shaped like the legacy one — {"id": urn} — for callers and receipts.
+        """
+        payload = {
+            "author": self.token_data["person_urn"],
+            "commentary": text,
+            "visibility": visibility,
+            "distribution": {
+                "feedDistribution": "MAIN_FEED",
+                "targetEntities": [],
+                "thirdPartyDistributionChannels": [],
+            },
+            "lifecycleState": "PUBLISHED",
+            "isReshareDisabledByAuthor": False,
+        }
+        if image_urn:
+            payload["content"] = {"media": {"id": image_urn}}
+        response = requests.post(f"{self.api_base_url}/rest/posts",
+                                 headers=self._versioned_headers(), json=payload, timeout=120)
+        if response.status_code not in (200, 201):
+            print(f"/rest/posts failed {response.status_code}: {response.text[:400]}")
+        response.raise_for_status()
+        urn = response.headers.get("x-restli-id", "")
+        print(f"Post created via the versioned Posts API: {urn}")
+        return {"id": urn}
 
     def _upload_image_binary(self, upload_url: str, image_path: str, headers: Optional[dict] = None) -> bool:
         """Upload image binary data to LinkedIn.
@@ -183,6 +256,12 @@ class LinkedInPoster:
         """
         if not self.token_data:
             raise ValueError("No valid token found. Please ensure a valid token file exists at ~/.mingdaoai/linkedin_token.json")
+
+        # Article posts still go the legacy route: their versioned equivalent is a different
+        # content shape (content.article with an uploaded thumbnail), and nothing in this channel
+        # posts articles — every post carries a diagram image.
+        if self.use_versioned and not media_url:
+            return self._create_post_versioned(text, visibility, image_urn)
 
         url = f"{self.api_base_url}/v2/ugcPosts"
         headers = {
